@@ -36,6 +36,9 @@ class Log():
                 return Log.GpsSmallSample.from_xml(sample)
             if type == Log.LapInfoSample.type:
                 return Log.LapInfoSample.from_xml(sample)
+            else:
+                logger.debug("Unhandled type %s", type)
+                return None
 
     @dataclass
     class PeriodicSample(Sample):

@@ -8,14 +8,6 @@ import xml.etree.ElementTree as etree
 from log import Log
 from tcx import Tcx
 
-# Datetime format in log file
-# 2024-04-10T06:22:49
-DATETIME_FMT_LOG = "%Y-%m-%dT%H:%M:%S"
-
-SEC_PER_MIN = 60
-MIN_PER_HOUR = 60
-SEC_PER_HOUR = SEC_PER_MIN * MIN_PER_HOUR
-
 LOG_LEVEL_DEFAULT = logging.INFO
 LOG_LEVEL_VERBOSE = logging.DEBUG
 LOG_FMT = "[%(levelname)5s][%(name)12s] %(message)s"
