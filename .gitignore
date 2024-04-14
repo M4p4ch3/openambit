@@ -27,7 +27,9 @@ moc_*.cpp
 /src/openambit/*.qrc.depends
 /wireshark_dissector/ambit.so
 /wireshark_dissector/plugin.c
+/tools/__pycache__/
 /tools/stravauploader/__pycache__/
+/test-data/sample/
 
 # Files created by IntelliJ Idea
 /.idea
