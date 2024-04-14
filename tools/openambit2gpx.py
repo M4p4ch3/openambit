@@ -82,14 +82,23 @@ def main(fileIn, fileOut, average_hr=True):
     ## setting variables up, starting output ##
     ###########################################
 
+    rootIn=etree.parse(fileIn)
     fOut=open(fileOut, 'w')
 
     fOut.write("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>\n\n")
-    fOut.write('<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="openambit2gpx" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gpxdata="http://www.cluetrust.com/XML/GPXDATA/1/0" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.cluetrust.com/XML/GPXDATA/1/0 http://www.cluetrust.com/Schemas/gpxdata10.xsd">')
+    fOut.write('<gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="openambit2gpx" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gpxdata="http://www.cluetrust.com/XML/GPXDATA/1/0" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.cluetrust.com/XML/GPXDATA/1/0 http://www.cluetrust.com/Schemas/gpxdata10.xsd">\n')
     fOut.write(" <trk>\n")
-    fOut.write("  <trkseg>\n")
 
-    rootIn=etree.parse(fileIn)
+    header_element = rootIn.find("Log/Header")
+    if header_element:
+        activity = header_element.findtext("Activity")
+        if activity:
+            fOut.write(f"  <name>{activity}</name>\n")
+        activity_type = header_element.findtext("ActivityTypeName")
+        if activity_type:
+            fOut.write(f"  <type>{activity_type.lower()}</type>\n")
+
+    fOut.write("  <trkseg>\n")
 
     latLast=None
     lonLast=None
