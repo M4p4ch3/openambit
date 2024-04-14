@@ -50,10 +50,13 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
         start_datetime = datetime.strptime(_datetime, DATETIME_FMT_LOG)
         activity = Tcx.Activity(activity_type_name, start_datetime)
 
-        position = None
-        altitude = 0
+        gps_available = False
+        last_datetime: datetime | None = None
         distance = 0
-        heart_rate = 0
+        altitude: float | None = None
+        position: Tcx.Activity.Lap.Track.Trackpoint.Position | None = None
+        heart_rate: int | None = None
+        cadence: int | None = None
         lap = Tcx.Activity.Lap()
         track = Tcx.Activity.Lap.Track()
 
@@ -75,32 +78,39 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
                     logger.error("Get Log/Samples/Sample/Time FAILED")
                     continue
                 _datetime = start_datetime + timedelta(seconds=int(int(time)/1000))
-                logger.debug("time = %s", _datetime)
 
             if type == "periodic":
 
                 altitude_str = sample.findtext("Altitude")
                 if altitude_str:
-                    altitude = int(altitude_str)
+                    altitude = float(altitude_str)
 
                 distance_str = sample.findtext("Distance")
                 if distance_str:
-                    distance = int(distance_str)
+                    distance = float(distance_str)
 
                 heart_rate_str = sample.findtext("HeartRate")
                 if heart_rate_str:
                    heart_rate = int(heart_rate_str)
 
-                trackpoint = Tcx.Activity.Lap.Track.Trackpoint(
-                    _datetime,
-                    position,
-                    float(altitude),
-                    float(distance),
-                    heart_rate)
+                cadence_str = sample.findtext("Cadence")
+                if cadence_str:
+                   cadence = int(cadence_str)
 
-                track.add_trackpoint(trackpoint)
+                if not gps_available:
+                    if last_datetime is None or (_datetime - last_datetime).seconds >= 5:
+                        last_datetime = _datetime
+                        trackpoint = Tcx.Activity.Lap.Track.Trackpoint(
+                            _datetime,
+                            distance=distance,
+                            altitude=altitude,
+                            position=position,
+                            heart_rate=heart_rate,
+                            cadence=cadence)
+                        track.add_trackpoint(trackpoint)
 
             elif "gps-" in type:
+                gps_available = True
 
                 latitude = sample.findtext("Latitude")
                 if not latitude:
@@ -118,10 +128,11 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
 
                 trackpoint = Tcx.Activity.Lap.Track.Trackpoint(
                     _datetime,
-                    position,
-                    float(altitude),
-                    float(distance),
-                    heart_rate)
+                    distance=distance,
+                    altitude=altitude,
+                    position=position,
+                    heart_rate=heart_rate,
+                    cadence=cadence)
 
                 track.add_trackpoint(trackpoint)
 
@@ -137,6 +148,9 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
                     logger.error("Get Log/Samples/Sample/Lap/Type FAILED")
                     continue
 
+                if "Interval" not in lap_type:
+                    continue
+
                 duration = lap_element.findtext("Duration")
                 if not duration:
                     logger.error("Get Log/Samples/Sample/Lap/Duration FAILED")
@@ -147,22 +161,28 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
                     logger.error("Get Log/Samples/Sample/Lap/Distance FAILED")
                     continue
 
-                if lap_type == "Start":
-                    # New lap
-                    lap = Tcx.Activity.Lap(_datetime)
-                    track = Tcx.Activity.Lap.Track()
-                elif lap_type == "Pause" or "Interval" in lap_type:
-                    # Lap complete
-                    lap.total_time = int(duration)
-                    lap.distance = int(distance_str)
-                    if "Low" in lap_type:
-                        lap.intensity = "Resting"
-                    if len(track.trackpoint_list) > 0:
-                        lap.add_track(track)
-                    lap.finalize()
+                # Lap complete
+                lap.total_time = int(duration)
+                lap.distance = int(distance_str)
+                if "Low" in lap_type:
+                    lap.intensity = "Resting"
+                if len(track.trackpoint_list) > 0:
+                    lap.add_track(track)
+                lap.finalize()
+                if len(lap.track_list) > 0:
                     activity.add_lap(lap)
-                else:
-                    logger.warning("Unhandled lap type %s", lap_type)
+
+                # New lap
+                last_datetime = None
+                lap = Tcx.Activity.Lap(_datetime)
+                track = Tcx.Activity.Lap.Track()
+
+        # Lap complete
+        if len(track.trackpoint_list) > 0:
+            lap.add_track(track)
+        lap.finalize()
+        if len(lap.track_list) > 0:
+            activity.add_lap(lap)
 
         tcx.add_activity(activity)
         tcx.export(tcx_file_path)

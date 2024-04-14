@@ -47,27 +47,48 @@ class Tcx():
                                 """)
 
                     time: datetime
-                    position: Tcx.Activity.Lap.Track.Trackpoint.Position | None
-                    altitude: float
-                    distance: float
-                    heart_rate: int
+                    distance: float = 0.0
+                    altitude: float | None = None
+                    position: Tcx.Activity.Lap.Track.Trackpoint.Position | None = None
+                    heart_rate: int | None = None
+                    cadence: int | None = None
 
                     def to_xml(self):
+
                         ret = format_txt(f"""
                             <Trackpoint>
                                 <Time>{self.time.strftime(Tcx.DATETIME_FMT)}</Time>
-                            """)
-                        # if self.position:
-                        #     ret += textwrap.indent(self.position.to_xml(), "    ")
-                        ret += format_txt(f"""
-                                <AltitudeMeters>{self.altitude}</AltitudeMeters>
                                 <DistanceMeters>{self.distance}</DistanceMeters>
+                            """)
+
+                        if self.altitude is not None:
+                            ret += textwrap.indent(format_txt(f"""
+                                    <AltitudeMeters>{self.altitude}</AltitudeMeters>
+                                """), "    ")
+
+                        if self.position:
+                            ret += textwrap.indent(self.position.to_xml(), "    ")
+
+                        if self.heart_rate is not None:
+                            ret += textwrap.indent(format_txt(f"""
                                 <HeartRateBpm xsi:type="HeartRateInBeatsPerMinute_t">
                                     <Value>{self.heart_rate}</Value>
                                 </HeartRateBpm>
-                                <SensorState>Absent</SensorState>
+                            """), "    ")
+
+                        if self.cadence is not None:
+                            ret += textwrap.indent(format_txt(f"""
+                                <Extensions>
+                                    <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2" CadenceSensor="">
+                                        <RunCadence>{self.cadence}</RunCadence>
+                                    </TPX>
+                                </Extensions>
+                                """), "    ")
+
+                        ret += format_txt(f"""
                             </Trackpoint>
                             """)
+
                         return ret
 
                 trackpoint_list: List[Tcx.Activity.Lap.Track.Trackpoint] = field(default_factory=list)
@@ -94,6 +115,7 @@ class Tcx():
             avg_heart_rate: int = 0
             max_heart_rate: int = 0
             intensity: str = "Active"
+            trigger_method: str = "Manual"
             track_list: List[Tcx.Activity.Lap.Track] = field(default_factory=list)
 
             def add_track(self, track: Tcx.Activity.Lap.Track):
@@ -115,7 +137,8 @@ class Tcx():
                 heart_rate_list: List[int] = []
                 for track in self.track_list:
                     for trackpoint in track.trackpoint_list:
-                        heart_rate_list += [trackpoint.heart_rate]
+                        if trackpoint.heart_rate is not None:
+                            heart_rate_list += [trackpoint.heart_rate]
                 if self.max_heart_rate == 0:
                     if len(heart_rate_list) > 0:
                         self.max_heart_rate = max(heart_rate_list)
@@ -137,7 +160,7 @@ class Tcx():
                             <Value>{self.max_heart_rate}</Value>
                         </MaximumHeartRateBpm>
                         <Intensity>{self.intensity}</Intensity>
-                        <TriggerMethod>Manual</TriggerMethod>
+                        <TriggerMethod>{self.trigger_method}</TriggerMethod>
                     """)
                 for track in self.track_list:
                     ret += textwrap.indent(track.to_xml(), "    ")
