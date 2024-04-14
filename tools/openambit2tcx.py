@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import logging
 import xml.etree.ElementTree as etree
 
+from log import Log
 from tcx import Tcx
 
 # Datetime format in log file
@@ -32,26 +33,21 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
 
         tcx = Tcx()
 
-        header = root.find("Log/Header")
-        if not header:
-            logger.error("Get Log/Header FAILED")
+        log_element = root.find("Log")
+        if not log_element:
+            logger.error("Get Log FAILED")
             return
 
-        _datetime = header.findtext("DateTime")
-        if not _datetime:
-            logger.error("Get Log/Header/DateTime FAILED")
+        log = Log.from_xml(log_element)
+        if not log:
+            logger.error("Get Log.from_xml FAILED")
             return
 
-        activity_type_name = header.findtext("ActivityTypeName")
-        if not activity_type_name:
-            logger.error("Get Log/Header/ActivityTypeName FAILED")
-            return
-
-        start_datetime = datetime.strptime(_datetime, DATETIME_FMT_LOG)
-        activity = Tcx.Activity(activity_type_name, start_datetime)
+        start_datetime = log._datetime
+        activity = Tcx.Activity(log.activity_type_name, start_datetime)
 
         gps_available = False
-        last_datetime: datetime | None = None
+        last_time: int | None = None
         distance = 0
         altitude: float | None = None
         position: Tcx.Activity.Lap.Track.Trackpoint.Position | None = None
@@ -60,46 +56,23 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
         lap = Tcx.Activity.Lap()
         track = Tcx.Activity.Lap.Track()
 
-        for sample in root.iterfind("Log/Samples/Sample"):
-            type = sample.findtext("Type")
-            if not type:
-                logger.error("Get Log/Samples/Sample/Type FAILED")
-                continue
+        for sample in log.sample_list:
 
-            utc = sample.findtext("UTC")
-            if utc:
-                # UTC format = 2024-04-10T04:22:47.905Z
-                # Strip trailling ms
-                _datetime = datetime.strptime(utc[:-len(".000Z")], DATETIME_FMT_LOG)
-            else:
-                # Rely on elapsed time instead
-                time = sample.findtext("Time")
-                if not time:
-                    logger.error("Get Log/Samples/Sample/Time FAILED")
-                    continue
-                _datetime = start_datetime + timedelta(seconds=int(int(time)/1000))
+            if isinstance(sample, Log.PeriodicSample):
 
-            if type == "periodic":
+                seconds = int(sample.time / 1000)
+                _datetime = start_datetime + timedelta(seconds=seconds)
 
-                altitude_str = sample.findtext("Altitude")
-                if altitude_str:
-                    altitude = float(altitude_str)
-
-                distance_str = sample.findtext("Distance")
-                if distance_str:
-                    distance = float(distance_str)
-
-                heart_rate_str = sample.findtext("HeartRate")
-                if heart_rate_str:
-                   heart_rate = int(heart_rate_str)
-
-                cadence_str = sample.findtext("Cadence")
-                if cadence_str:
-                   cadence = int(cadence_str)
+                if sample.distance is not None:
+                    distance = sample.distance
+                if sample.altitude is not None:
+                    altitude = sample.altitude
+                if sample.cadence is not None:
+                    cadence = sample.cadence
 
                 if not gps_available:
-                    if last_datetime is None or (_datetime - last_datetime).seconds >= 5:
-                        last_datetime = _datetime
+                    if last_time is None or seconds - last_time >= 5:
+                        last_time = seconds
                         trackpoint = Tcx.Activity.Lap.Track.Trackpoint(
                             _datetime,
                             distance=distance,
@@ -109,22 +82,14 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
                             cadence=cadence)
                         track.add_trackpoint(trackpoint)
 
-            elif "gps-" in type:
+            elif isinstance(sample, Log.GpsSmallSample):
                 gps_available = True
 
-                latitude = sample.findtext("Latitude")
-                if not latitude:
-                    logger.error("Get Log/Samples/Sample/Latitude FAILED")
-                    continue
-
-                longitude = sample.findtext("Longitude")
-                if not longitude:
-                    logger.error("Get Log/Samples/Sample/Longitude FAILED")
-                    continue
+                _datetime = sample.utc
 
                 position = Tcx.Activity.Lap.Track.Trackpoint.Position(
-                    float(latitude) / 10000000,
-                    float(longitude) / 10000000)
+                    float(sample.latitude) / 10000000,
+                    float(sample.longitude) / 10000000)
 
                 trackpoint = Tcx.Activity.Lap.Track.Trackpoint(
                     _datetime,
@@ -136,35 +101,18 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
 
                 track.add_trackpoint(trackpoint)
 
-            elif type == "lap-info":
+            elif isinstance(sample, Log.LapInfoSample):
 
-                lap_element = sample.find("Lap")
-                if not lap_element:
-                    logger.error("Get Log/Samples/Sample/Lap FAILED")
+                sample_lap = sample.lap
+                if "Interval" not in sample_lap.type:
                     continue
 
-                lap_type = lap_element.findtext("Type")
-                if not lap_type:
-                    logger.error("Get Log/Samples/Sample/Lap/Type FAILED")
-                    continue
-
-                if "Interval" not in lap_type:
-                    continue
-
-                duration = lap_element.findtext("Duration")
-                if not duration:
-                    logger.error("Get Log/Samples/Sample/Lap/Duration FAILED")
-                    continue
-
-                distance_str = lap_element.findtext("Distance")
-                if not distance_str:
-                    logger.error("Get Log/Samples/Sample/Lap/Distance FAILED")
-                    continue
+                _datetime = sample_lap._datetime
 
                 # Lap complete
-                lap.total_time = int(duration)
-                lap.distance = int(distance_str)
-                if "Low" in lap_type:
+                lap.total_time = sample_lap.duration
+                lap.distance = sample_lap.distance
+                if "Low" in sample_lap.type:
                     lap.intensity = "Resting"
                 if len(track.trackpoint_list) > 0:
                     lap.add_track(track)
@@ -173,7 +121,7 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
                     activity.add_lap(lap)
 
                 # New lap
-                last_datetime = None
+                last_time = None
                 lap = Tcx.Activity.Lap(_datetime)
                 track = Tcx.Activity.Lap.Track()
 
