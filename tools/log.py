@@ -234,6 +234,7 @@ class Log():
             return Log.LapInfoSample(cls.type, time, lap, utc=utc)
 
     _datetime: datetime
+    activity_name: str
     activity_type_name: str
     sample_list: List[Log.Sample] = field(default_factory=list)
 
@@ -252,6 +253,11 @@ class Log():
             logger.error("Get Header/DateTime FAILED")
             return
 
+        activity_name = header.findtext("Activity")
+        if not activity_name:
+            logger.error("Get Header/Activity FAILED")
+            return
+
         activity_type_name = header.findtext("ActivityTypeName")
         if not activity_type_name:
             logger.error("Get Header/ActivityTypeName FAILED")
@@ -259,7 +265,7 @@ class Log():
 
         _datetime = datetime.strptime(datetime_str, Log.DATETIME_FMT)
 
-        log = Log(_datetime, activity_type_name)
+        log = Log(_datetime, activity_name, activity_type_name)
 
         for sample_element in log_element.iterfind("Samples/Sample"):
             sample = Log.Sample.from_xml(sample_element)

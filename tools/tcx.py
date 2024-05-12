@@ -169,8 +169,9 @@ class Tcx():
                     """)
                 return ret
 
-        sport: str
         id: datetime
+        name: str
+        sport: str
         lap_list: List[Tcx.Activity.Lap] = field(default_factory=list)
 
         def add_lap(self, lap: Tcx.Activity.Lap):
@@ -180,6 +181,7 @@ class Tcx():
             ret = format_txt(f"""
                 <Activity Sport="{self.sport}">
                     <Id>{self.id.strftime(Tcx.DATETIME_FMT)}</Id>
+                    <Name>{self.name}</Name>
                 """)
             for lap in self.lap_list:
                 ret += textwrap.indent(lap.to_xml(), "    ")
