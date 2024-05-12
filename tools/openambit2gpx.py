@@ -338,6 +338,10 @@ def main(fileIn, fileOut, average_hr=True):
     fOut.close()
     
 
+# main alias
+def convert_log_to_gpx(fileIn, fileOut, average_hr=True):
+    return main(fileIn, fileOut, average_hr)
+
 if __name__ == "__main__":
 
     ##############################
