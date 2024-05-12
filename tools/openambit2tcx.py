@@ -36,7 +36,10 @@ def convert_log_to_tcx(log_file_path: str, tcx_file_path: str = ""):
             return
 
         start_datetime = log._datetime
-        activity = Tcx.Activity(log.activity_type_name, start_datetime)
+        activity_type_name = log.activity_type_name
+        if log.activity_type_name == "Aerobics":
+            activity_type_name = "workout"
+        activity = Tcx.Activity(id=start_datetime, name=log.activity_name, sport=activity_type_name)
 
         gps_available = False
         last_time: int | None = None
