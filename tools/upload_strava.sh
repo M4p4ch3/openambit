@@ -1,9 +1,8 @@
 #!/bin/sh
 
-# Convert logs in ~/.openambit/to_upload/ to GPX or TCX and upload them to Strava
+# Upload all ..x (GPX or TCX) files in input dir to Strava
 
 ROOT=.
-
 if [ -d tools ] ; then
     ROOT=.
 elif [ -d stravauploader ] ; then
@@ -11,18 +10,14 @@ elif [ -d stravauploader ] ; then
     ROOT=../
 fi
 
-log_list=`ls ~/.openambit/to_upload/*.log`
-echo "log_list = $log_list"
+LOG_DIR=$1
+if [ "$LOG_DIR" = "" ]; then
+    LOG_DIR="$HOME/.openambit/to_upload/"
+fi
+echo "LOG_DIR = $LOG_DIR"
 
-out_dir="/home/pache/.openambit/to_upload/"
-
-for log in $log_list ; do
-    echo ${ROOT}/tools/openambit2x.py "$log" --out "$out_dir"
-    ${ROOT}/tools/openambit2x.py "$log" --out "$out_dir"
-done
-
-x_list=`ls ~/.openambit/to_upload/*.*x`
-echo "x_list = $x_list"
+x_list=`ls $LOG_DIR/*.*x`
+echo "x_list = [$x_list]"
 
 echo ${ROOT}/tools/stravauploader/strava_uploader.py -l $x_list
 ${ROOT}/tools/stravauploader/strava_uploader.py -l $x_list
